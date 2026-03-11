@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import axios from 'axios';
-import { Briefcase, MapPin, Upload, Star, Search, Sparkles, CheckCircle, LayoutGrid } from 'lucide-react';
+import { Briefcase, MapPin, Upload, Search, Sparkles, LogOut, User } from 'lucide-react';
 
 const API_BASE = 'http://127.0.0.1:8005';
 
@@ -209,7 +209,99 @@ const JobCard = ({ job, matchData, index, onAnalyze, isBestMatch }) => {
   );
 };
 
+// ── Login / Register Sayfası ─────────────────────────────
+const AuthPage = ({ onLogin, showToast }) => {
+  const [mode, setMode] = useState('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!email || !password) { showToast('Email ve şifre zorunlu.', 'error'); return; }
+    setLoading(true);
+    try {
+      if (mode === 'register') {
+        await axios.post(`${API_BASE}/auth/register`, { email, password, full_name: fullName });
+        showToast('Kayıt başarılı! Giriş yapılıyor...', 'success');
+      }
+      const formData = new FormData();
+      formData.append('username', email);
+      formData.append('password', password);
+      const res = await axios.post(`${API_BASE}/auth/login`, formData);
+      const token = res.data.access_token;
+      localStorage.setItem('token', token);
+      onLogin(token, email);
+    } catch (err) {
+      showToast(err.response?.data?.detail || 'Hata oluştu.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f0f4ff] flex items-center justify-center px-4">
+      <div className="w-full max-w-md" style={{ animation: 'fadeSlideUp 0.5s ease' }}>
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl mx-auto mb-4"
+            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>
+            <Sparkles size={28} />
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 font-syne">JobNest <span className="text-blue-600 italic">AI</span></h1>
+          <p className="text-slate-500 mt-2 font-medium">Yapay zeka destekli iş arama platformu</p>
+        </div>
+
+        <div className="bg-white rounded-3xl p-8 shadow-xl border border-slate-100">
+          <div className="flex gap-2 mb-8 bg-slate-100 p-1.5 rounded-2xl">
+            <button onClick={() => setMode('login')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${mode === 'login' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>
+              Giriş Yap
+            </button>
+            <button onClick={() => setMode('register')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-black transition-all ${mode === 'register' ? 'bg-white shadow text-slate-900' : 'text-slate-400'}`}>
+              Kayıt Ol
+            </button>
+          </div>
+
+          {mode === 'register' && (
+            <div className="mb-4">
+              <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 block">Ad Soyad</label>
+              <input type="text" placeholder="Mustafa Özbezek" value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 block">Email</label>
+            <input type="email" placeholder="ornek@email.com" value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+
+          <div className="mb-6">
+            <label className="text-xs font-black text-slate-500 uppercase tracking-widest mb-2 block">Şifre</label>
+            <input type="password" placeholder="••••••••" value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+              className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+
+          <button onClick={handleSubmit} disabled={loading}
+            className="w-full py-4 rounded-2xl text-white font-black text-sm transition-all hover:scale-105 active:scale-95 disabled:opacity-60"
+            style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 20px rgba(79,70,229,0.35)' }}>
+            {loading ? '⟳ Yükleniyor...' : mode === 'login' ? 'Giriş Yap →' : 'Kayıt Ol →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Ana App ───────────────────────────────────────────────
 export default function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [userEmail, setUserEmail] = useState('');
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -224,13 +316,27 @@ export default function App() {
   const [matchCount, setMatchCount] = useState(0);
   const fileRef = useRef();
 
+  const showToast = (message, type = 'info') => setToast({ message, type });
+
+  const handleLogin = (newToken, email) => {
+    setToken(newToken);
+    setUserEmail(email);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUserEmail('');
+    setMatchData({});
+    setCvStatus(null);
+  };
+
   useEffect(() => {
+    if (!token) return;
     axios.get(`${API_BASE}/jobs/`)
       .then(res => { setJobs(res.data); setLoading(false); })
       .catch(() => { showToast('İlanlar yüklenemedi.', 'error'); setLoading(false); });
-  }, []);
-
-  const showToast = (message, type = 'info') => setToast({ message, type });
+  }, [token]);
 
   const handleCVUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -245,7 +351,10 @@ export default function App() {
 
     try {
       const res = await axios.post(`${API_BASE}/match/upload-cv`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
+        },
         timeout: 300000,
       });
 
@@ -264,7 +373,6 @@ export default function App() {
       setMatchCount(res.data.matches?.length || 0);
       setCvStatus('done');
 
-      // Yeni ilanları da çek
       const jobsRes = await axios.get(`${API_BASE}/jobs/`);
       setJobs(jobsRes.data);
 
@@ -303,6 +411,22 @@ export default function App() {
 
   const locations = [...new Set(jobs.map(j => j.location).filter(Boolean))].slice(0, 8);
 
+  if (!token) {
+    return (
+      <>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+          * { font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+          h1,h2,h3,.font-syne { font-family: 'Syne', sans-serif; }
+          @keyframes fadeSlideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        `}</style>
+        <AuthPage onLogin={handleLogin} showToast={showToast} />
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      </>
+    );
+  }
+
   return (
     <>
       <style>{`
@@ -318,7 +442,6 @@ export default function App() {
         .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
 
-      {/* AI Analiz Overlay */}
       {cvStatus === 'analyzing' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center"
           style={{ background: 'rgba(15,15,35,0.88)', backdropFilter: 'blur(14px)' }}>
@@ -360,29 +483,36 @@ export default function App() {
                 <span className="bg-indigo-100 text-indigo-700 text-xs font-black px-2.5 py-1 rounded-full">{jobs.length} ilan</span>
               )}
             </div>
-            <button onClick={() => fileRef.current?.click()} disabled={cvLoading}
-              className="flex items-center gap-2 text-white text-sm font-bold px-5 py-2.5 rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 20px rgba(79,70,229,0.35)' }}>
-              {cvLoading
-                ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Analiz...</>
-                : <><Upload size={16} /> CV Analiz Et</>}
-            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full">
+                <User size={14} className="text-slate-400" />
+                <span className="text-xs font-bold text-slate-600">{userEmail || 'Kullanıcı'}</span>
+              </div>
+              <button onClick={() => fileRef.current?.click()} disabled={cvLoading}
+                className="flex items-center gap-2 text-white text-sm font-bold px-5 py-2.5 rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-60"
+                style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 4px 20px rgba(79,70,229,0.35)' }}>
+                {cvLoading
+                  ? <><span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span> Analiz...</>
+                  : <><Upload size={16} /> CV Analiz Et</>}
+              </button>
+              <button onClick={handleLogout}
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-red-50 hover:text-red-500 text-slate-400 transition-all">
+                <LogOut size={16} />
+              </button>
+            </div>
             <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleCVUpload} />
           </div>
         </nav>
 
         <main className="max-w-7xl mx-auto px-6 py-10">
-          <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6"
-            style={{ animation: 'fadeSlideUp 0.5s ease both' }}>
-            <div>
-              <h2 className="text-5xl font-black text-slate-900 tracking-tight leading-tight font-syne">
-                Kariyer Yolculuğunu <br /><span className="text-blue-600">Optimize Et.</span>
-              </h2>
-              <p className="text-slate-500 font-medium mt-2">Yapay zeka senin için piyasayı taradı.</p>
-            </div>
+          <header className="mb-8" style={{ animation: 'fadeSlideUp 0.5s ease both' }}>
+            <h2 className="text-5xl font-black text-slate-900 tracking-tight leading-tight font-syne">
+              Kariyer Yolculuğunu <br /><span className="text-blue-600">Optimize Et.</span>
+            </h2>
+            <p className="text-slate-500 font-medium mt-2">Yapay zeka senin için piyasayı taradı.</p>
           </header>
 
-          {/* Meslek Tespiti Banner */}
           {cvStatus === 'done' && detectedProfession && (
             <div className="mb-8 rounded-3xl p-6 flex items-center justify-between flex-wrap gap-4"
               style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', animation: 'fadeSlideUp 0.5s ease' }}>
